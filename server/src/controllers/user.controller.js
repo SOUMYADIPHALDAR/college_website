@@ -2,6 +2,7 @@ import asyncHandler from "../utils/asyncHandler.js";
 import apiError from "../utils/apiError.js";
 import apiResponse from "../utils/apiResponse.js";
 import User from "../models/user.model.js";
+import jwt from "jsonwebtoken";
 
 const generateAccessAndRefreshToken = async (userId) => {
     const user = await User.findById(userId);
@@ -118,8 +119,51 @@ const logOut = asyncHandler(async(req, res) => {
     )
 });
 
+const refreshAccessToken = asyncHandler(async(req, res) => {
+    const isComingToken = req.cookies?.refreshToken || req.body.refreshToken;
+
+    if (!isComingToken) {
+        throw new apiError(400, "Unauthorized access...");
+    }
+
+    try {
+        const decodedToken = jwt.verify(isComingToken, process.env.REFRESH_TOKEN_SECRET);
+
+        const user = await User.findById(decodedToken._id);
+        if (!user) {
+            throw new apiError(404, "Invalid token..");
+        }
+
+        if (isComingToken !== user?.refreshToken) {
+            throw new apiError(400, "Refresh token is expired..");
+        }
+
+        const { accessToken, newRefreshToken } = await generateAccessAndRefreshToken(user._id);
+
+        const option = {
+            httpOnly: true,
+            secure: true
+        };
+
+        return res
+        .status(200)
+        .cookie("accessToken", accessToken, option)
+        .cookie("refreshToken", newRefreshToken, option)
+        .json(
+            new apiResponse(200,
+                {accessToken, refreshToken: newRefreshToken},
+                "Refreshed access token.."
+            )
+        )
+
+    } catch (error) {
+        throw new apiError(500, error.message);
+    }
+})
+
 export {
     signUp,
     logIn,
-    logOut
+    logOut,
+    refreshAccessToken
 }
