@@ -87,7 +87,39 @@ const logIn = asyncHandler(async(req, res) => {
     )
 });
 
+const logOut = asyncHandler(async(req, res) => {
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+        throw new apiError(404, "User not found..");
+    }
+
+    await User.findByIdAndUpdate(
+        user._id,
+        {
+            $set: {
+                refreshToken: undefined
+            }
+        },
+        { new: true }
+    );
+
+    const option = {
+        httpOnly: true, 
+        secure: true
+    };
+
+    return res
+    .status(200)
+    .cookie("accessToken", option)
+    .cookie("refreshToken", option)
+    .json(
+        new apiResponse(200, "Logged out successfully..")
+    )
+});
+
 export {
     signUp,
-    logIn
+    logIn,
+    logOut
 }
